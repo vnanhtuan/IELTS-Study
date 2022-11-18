@@ -1,0 +1,159 @@
+using System;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using EASendMail;
+
+namespace ConsoleApp
+{
+    class Program
+    {
+        
+        static void Main(string[] args)
+        {
+            Console.WriteLine("+------------------------------------------------------------------+");
+            Console.WriteLine("  Sign in with MS OAuth                                             ");
+            Console.WriteLine("   If you got \"This app isn't verified\" information in Web Browser, ");
+            Console.WriteLine("   click \"Advanced\" -> Go to ... to continue test.");
+            Console.WriteLine("+------------------------------------------------------------------+");
+            Console.WriteLine("");
+            Console.WriteLine("Press any key to sign in...");
+            Console.ReadKey();
+
+            try
+            {
+                SendMail();
+            }
+            catch (Exception ep)
+            {
+                Console.WriteLine(ep.ToString());
+            }
+            Console.ReadKey();
+
+        }
+
+        static public void SendMail()
+        {
+            try
+            {
+                string client_id = "b530658b-258c-4acd-9683-842e05a633df";
+                string client_secret = "~-M8Q~BuuIz6MDzwL6w.4cxLJVY.4G4fMWVNzcCf";
+
+                // If your application is not created by Office365 administrator,
+                // please use Office365 directory tenant id, you should ask Offic365 administrator to send it to you.
+                // Office365 administrator can query tenant id in https://portal.azure.com/ - Azure Active Directory.
+                string tenant = "e03b13e2-6974-4933-a36c-ce93e2181fad";
+
+                string requestData =
+                    string.Format("client_id={0}&client_secret={1}&scope=https://outlook.office365.com/.default&grant_type=client_credentials",
+                        client_id, client_secret);
+
+                string tokenUri = string.Format("https://login.microsoftonline.com/{0}/oauth2/v2.0/token", tenant);
+                string responseText = _postString(tokenUri, requestData);
+
+                OAuthResponseParser parser = new OAuthResponseParser();
+                parser.Load(responseText);
+
+
+                var _smptClient = new System.Net.Mail.SmtpClient("outlook.office365.com")
+                {
+                    EnableSsl = true,
+                    UseDefaultCredentials = true,
+                    Credentials = new NetworkCredential("no-reply@conexus.no", parser.AccessToken)
+                };
+
+                try
+                {
+                    _smptClient.DeliveryMethod = System.Net.Mail.SmtpDeliveryMethod.Network;
+                    var mailMessage = new System.Net.Mail.MailMessage { Subject = "Hello", Body = "Hello world", IsBodyHtml = true };
+                    mailMessage.From = new System.Net.Mail.MailAddress("no-reply@conexus.no");
+                    mailMessage.To.Add(new System.Net.Mail.MailAddress("vnanhtuan@gmail.com"));
+                    _smptClient.Send(mailMessage);
+                    mailMessage.Dispose();
+                }
+                catch(Exception ex)
+                {
+                    var a = ex;
+                }
+                
+
+
+
+                string officeUser = "no-reply@conexus.no";
+                var server = new SmtpServer("outlook.office365.com");
+                server.Protocol = ServerProtocol.ExchangeEWS;
+                server.User = officeUser;
+
+                server.Password = parser.AccessToken;
+                server.AuthType = SmtpAuthType.XOAUTH2;
+                server.ConnectType = SmtpConnectType.ConnectSSLAuto;
+
+                var mail = new SmtpMail("TryIt");
+
+
+                mail.From = officeUser;
+                mail.To = "vnanhtuan@gmail.com";
+
+                mail.Subject = "Office 365 background service oauth test";
+                mail.TextBody = "this is a test, don't reply";
+
+                var smtp = new SmtpClient();
+                smtp.SendMail(server, mail);
+
+                Console.WriteLine("Message delivered!");
+            }
+            catch (Exception ep)
+            {
+                Console.WriteLine(ep.ToString());
+            }
+        }
+        static string _postString(string uri, string requestData)
+        {
+            HttpWebRequest httpRequest = WebRequest.Create(uri) as HttpWebRequest;
+            httpRequest.Method = "POST";
+            httpRequest.ContentType = "application/x-www-form-urlencoded";
+
+            using (Stream requestStream = httpRequest.GetRequestStream())
+            {
+                byte[] requestBuffer = Encoding.UTF8.GetBytes(requestData);
+                requestStream.Write(requestBuffer, 0, requestBuffer.Length);
+                requestStream.Close();
+            }
+
+            try
+            {
+                HttpWebResponse httpResponse = httpRequest.GetResponse() as HttpWebResponse;
+                using (StreamReader reader = new StreamReader(httpResponse.GetResponseStream()))
+                {
+                    // reads response body
+                    string responseText = reader.ReadToEnd();
+                    Console.WriteLine(responseText);
+                    return responseText;
+                }
+            }
+            catch (WebException ex)
+            {
+                if (ex.Status == WebExceptionStatus.ProtocolError)
+                {
+                    var response = ex.Response as HttpWebResponse;
+                    if (response != null)
+                    {
+                        Console.WriteLine("HTTP: " + response.StatusCode);
+                        using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                        {
+                            // reads response body
+                            string responseText = reader.ReadToEnd();
+                            Console.WriteLine(responseText);
+                        }
+                    }
+                }
+
+                throw ex;
+            }
+        }
+    }
+    
+}
